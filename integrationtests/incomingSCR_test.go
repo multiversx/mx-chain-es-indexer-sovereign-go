@@ -14,6 +14,7 @@ import (
 	"github.com/multiversx/mx-chain-core-go/data/esdt"
 	"github.com/multiversx/mx-chain-core-go/data/outport"
 	"github.com/multiversx/mx-chain-core-go/data/smartContractResult"
+	"github.com/multiversx/mx-chain-core-go/data/sovereign/dto"
 	"github.com/multiversx/mx-chain-core-go/data/transaction"
 	"github.com/stretchr/testify/require"
 
@@ -102,7 +103,7 @@ func TestCrossChainTokensIndexingFromMainChain(t *testing.T) {
 		MiniBlocks: dataBlock.MiniBlockSlice{
 			{
 				Type:            dataBlock.SmartContractResultBlock,
-				SenderShardID:   core.MainChainShardId,
+				SenderShardID:   uint32(dto.MVX),
 				ReceiverShardID: core.SovereignChainShardId,
 				TxHashes:        [][]byte{scrHash},
 			},
