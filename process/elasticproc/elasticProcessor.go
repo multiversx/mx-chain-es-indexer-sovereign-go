@@ -844,7 +844,7 @@ func (ei *elasticProcessor) isIndexEnabled(index string) bool {
 }
 
 func (ei *elasticProcessor) doBulkRequests(index string, buffSlice []*bytes.Buffer, shardID uint32) error {
-	nuParallelWrite := 5
+	nuParallelWrite := 15
 
 	jobs := make(chan *bytes.Buffer)
 	errs := make(chan error, len(buffSlice))
