@@ -844,13 +844,37 @@ func (ei *elasticProcessor) isIndexEnabled(index string) bool {
 }
 
 func (ei *elasticProcessor) doBulkRequests(index string, buffSlice []*bytes.Buffer, shardID uint32) error {
-	var err error
-	for idx := range buffSlice {
-		ctxWithValue := context.WithValue(context.Background(), request.ContextKey, request.ExtendTopicWithShardID(request.BulkTopic, shardID))
-		err = ei.elasticClient.DoBulkRequest(ctxWithValue, buffSlice[idx], index)
-		if err != nil {
-			return err
-		}
+	nuParallelWrite := 5
+
+	jobs := make(chan *bytes.Buffer)
+	errs := make(chan error, len(buffSlice))
+	var wg sync.WaitGroup
+
+	// Start worker goroutines
+	for i := 0; i < nuParallelWrite; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for buf := range jobs {
+				ctx := context.WithValue(context.Background(), request.ContextKey, request.ExtendTopicWithShardID(request.BulkTopic, shardID))
+				if err := ei.elasticClient.DoBulkRequest(ctx, buf, index); err != nil {
+					errs <- err
+					return
+				}
+			}
+		}()
+	}
+
+	for _, buf := range buffSlice {
+		jobs <- buf
+	}
+	close(jobs)
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		return err
 	}
 
 	return nil
