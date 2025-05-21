@@ -78,7 +78,7 @@ func CreateElasticProcessor(arguments ArgElasticProcessorFactory) (dataindexer.E
 		return nil, err
 	}
 
-	blockProcHandler, err := blockProc.NewBlockProcessor(arguments.Hasher, arguments.Marshalizer)
+	blockProcHandler, err := blockProc.NewBlockProcessor(arguments.Hasher, arguments.Marshalizer, arguments.ValidatorPubkeyConverter)
 	if err != nil {
 		return nil, err
 	}
