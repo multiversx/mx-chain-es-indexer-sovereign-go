@@ -22,7 +22,7 @@
         url = "http://localhost:9200"
         username = ""
         password = ""
-        bulk-request-max-size-in-bytes = 512000 # 0.5 mb  #4194304 # 4MB
+        bulk-request-max-size-in-bytes = 512000 # 0.5 mb
         num-writes-in-parallel = 5
 
     # Configuration for main chain elastic cluster

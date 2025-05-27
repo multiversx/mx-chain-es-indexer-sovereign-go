@@ -31,16 +31,17 @@ import (
 
 func newElasticsearchProcessor(elasticsearchWriter DatabaseClientHandler, arguments *ArgElasticProcessor) *elasticProcessor {
 	return &elasticProcessor{
-		elasticClient:      elasticsearchWriter,
-		enabledIndexes:     arguments.EnabledIndexes,
-		blockProc:          arguments.BlockProc,
-		transactionsProc:   arguments.TransactionsProc,
-		miniblocksProc:     arguments.MiniblocksProc,
-		accountsProc:       arguments.AccountsProc,
-		validatorsProc:     arguments.ValidatorsProc,
-		statisticsProc:     arguments.StatisticsProc,
-		logsAndEventsProc:  arguments.LogsAndEventsProc,
-		indexTokensHandler: arguments.IndexTokensHandler,
+		elasticClient:       elasticsearchWriter,
+		enabledIndexes:      arguments.EnabledIndexes,
+		blockProc:           arguments.BlockProc,
+		transactionsProc:    arguments.TransactionsProc,
+		miniblocksProc:      arguments.MiniblocksProc,
+		accountsProc:        arguments.AccountsProc,
+		validatorsProc:      arguments.ValidatorsProc,
+		statisticsProc:      arguments.StatisticsProc,
+		logsAndEventsProc:   arguments.LogsAndEventsProc,
+		indexTokensHandler:  arguments.IndexTokensHandler,
+		numWritesInParallel: 1,
 	}
 }
 
@@ -81,15 +82,16 @@ func createMockElasticProcessorArgs() *ArgElasticProcessor {
 		EnabledIndexes: map[string]struct{}{
 			dataindexer.BlockIndex: {}, dataindexer.TransactionsIndex: {}, dataindexer.MiniblocksIndex: {}, dataindexer.ValidatorsIndex: {}, dataindexer.RoundsIndex: {}, dataindexer.AccountsIndex: {}, dataindexer.RatingIndex: {}, dataindexer.AccountsHistoryIndex: {},
 		},
-		ValidatorsProc:     vp,
-		StatisticsProc:     statistics.NewStatisticsProcessor(),
-		TransactionsProc:   &mock.DBTransactionProcessorStub{},
-		MiniblocksProc:     mp,
-		AccountsProc:       acp,
-		BlockProc:          bp,
-		LogsAndEventsProc:  lp,
-		OperationsProc:     op,
-		IndexTokensHandler: &IndexTokenHandlerMock{},
+		ValidatorsProc:      vp,
+		StatisticsProc:      statistics.NewStatisticsProcessor(),
+		TransactionsProc:    &mock.DBTransactionProcessorStub{},
+		MiniblocksProc:      mp,
+		AccountsProc:        acp,
+		BlockProc:           bp,
+		LogsAndEventsProc:   lp,
+		OperationsProc:      op,
+		IndexTokensHandler:  &IndexTokenHandlerMock{},
+		NumWritesInParallel: 1,
 	}
 }
 
