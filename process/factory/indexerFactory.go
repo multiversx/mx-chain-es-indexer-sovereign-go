@@ -35,6 +35,7 @@ type ArgsIndexerFactory struct {
 	MainChainElastic         factory.ElasticConfig
 	Denomination             int
 	BulkRequestMaxSize       int
+	NumWritesInParallel      int
 	Url                      string
 	UserName                 string
 	Password                 string
@@ -115,6 +116,7 @@ func createElasticProcessor(args ArgsIndexerFactory) (dataindexer.ElasticProcess
 		Denomination:             args.Denomination,
 		EnabledIndexes:           args.EnabledIndexes,
 		BulkRequestMaxSize:       args.BulkRequestMaxSize,
+		NumWritesInParallel:      args.NumWritesInParallel,
 		ImportDB:                 args.ImportDB,
 		Version:                  args.Version,
 		TxHashExtractor:          args.RunTypeComponents.TxHashExtractorCreator(),

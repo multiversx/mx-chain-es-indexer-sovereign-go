@@ -23,6 +23,7 @@
         username = ""
         password = ""
         bulk-request-max-size-in-bytes = 512000 # 0.5 mb  #4194304 # 4MB
+        num-writes-in-parallel = 10
 
     # Configuration for main chain elastic cluster
     # Used by the sovereign chain indexer to index incoming new tokens properties

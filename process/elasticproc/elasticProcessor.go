@@ -36,46 +36,50 @@ var (
 	}
 )
 
-const versionStr = "indexer-version"
+const (
+	versionStr = "indexer-version"
+)
 
 // ArgElasticProcessor holds all dependencies required by the elasticProcessor in order to create
 // new instances
 type ArgElasticProcessor struct {
-	BulkRequestMaxSize int
-	UseKibana          bool
-	ImportDB           bool
-	IndexTemplates     map[string]*bytes.Buffer
-	IndexPolicies      map[string]*bytes.Buffer
-	ExtraMappings      []templates.ExtraMapping
-	EnabledIndexes     map[string]struct{}
-	TransactionsProc   DBTransactionsHandler
-	AccountsProc       DBAccountHandler
-	BlockProc          DBBlockHandler
-	MiniblocksProc     DBMiniblocksHandler
-	StatisticsProc     DBStatisticsHandler
-	ValidatorsProc     DBValidatorsHandler
-	DBClient           DatabaseClientHandler
-	LogsAndEventsProc  DBLogsAndEventsHandler
-	OperationsProc     OperationsHandler
-	Version            string
-	IndexTokensHandler IndexTokensHandler
+	NumWritesInParallel int
+	BulkRequestMaxSize  int
+	UseKibana           bool
+	ImportDB            bool
+	IndexTemplates      map[string]*bytes.Buffer
+	IndexPolicies       map[string]*bytes.Buffer
+	ExtraMappings       []templates.ExtraMapping
+	EnabledIndexes      map[string]struct{}
+	TransactionsProc    DBTransactionsHandler
+	AccountsProc        DBAccountHandler
+	BlockProc           DBBlockHandler
+	MiniblocksProc      DBMiniblocksHandler
+	StatisticsProc      DBStatisticsHandler
+	ValidatorsProc      DBValidatorsHandler
+	DBClient            DatabaseClientHandler
+	LogsAndEventsProc   DBLogsAndEventsHandler
+	OperationsProc      OperationsHandler
+	Version             string
+	IndexTokensHandler  IndexTokensHandler
 }
 
 type elasticProcessor struct {
-	bulkRequestMaxSize int
-	importDB           bool
-	enabledIndexes     map[string]struct{}
-	mutex              sync.RWMutex
-	elasticClient      DatabaseClientHandler
-	accountsProc       DBAccountHandler
-	blockProc          DBBlockHandler
-	transactionsProc   DBTransactionsHandler
-	miniblocksProc     DBMiniblocksHandler
-	statisticsProc     DBStatisticsHandler
-	validatorsProc     DBValidatorsHandler
-	logsAndEventsProc  DBLogsAndEventsHandler
-	operationsProc     OperationsHandler
-	indexTokensHandler IndexTokensHandler
+	numWritesInParallel int
+	bulkRequestMaxSize  int
+	importDB            bool
+	enabledIndexes      map[string]struct{}
+	mutex               sync.RWMutex
+	elasticClient       DatabaseClientHandler
+	accountsProc        DBAccountHandler
+	blockProc           DBBlockHandler
+	transactionsProc    DBTransactionsHandler
+	miniblocksProc      DBMiniblocksHandler
+	statisticsProc      DBStatisticsHandler
+	validatorsProc      DBValidatorsHandler
+	logsAndEventsProc   DBLogsAndEventsHandler
+	operationsProc      OperationsHandler
+	indexTokensHandler  IndexTokensHandler
 }
 
 // NewElasticProcessor handles Elasticsearch operations such as initialization, adding, modifying or removing data
@@ -84,20 +88,25 @@ func NewElasticProcessor(arguments *ArgElasticProcessor) (*elasticProcessor, err
 	if err != nil {
 		return nil, err
 	}
+	numWritesInParallel := arguments.NumWritesInParallel
+	if numWritesInParallel <= 0 {
+		numWritesInParallel = 1
+	}
 
 	ei := &elasticProcessor{
-		elasticClient:      arguments.DBClient,
-		enabledIndexes:     arguments.EnabledIndexes,
-		accountsProc:       arguments.AccountsProc,
-		blockProc:          arguments.BlockProc,
-		miniblocksProc:     arguments.MiniblocksProc,
-		transactionsProc:   arguments.TransactionsProc,
-		statisticsProc:     arguments.StatisticsProc,
-		validatorsProc:     arguments.ValidatorsProc,
-		logsAndEventsProc:  arguments.LogsAndEventsProc,
-		operationsProc:     arguments.OperationsProc,
-		bulkRequestMaxSize: arguments.BulkRequestMaxSize,
-		indexTokensHandler: arguments.IndexTokensHandler,
+		elasticClient:       arguments.DBClient,
+		enabledIndexes:      arguments.EnabledIndexes,
+		accountsProc:        arguments.AccountsProc,
+		blockProc:           arguments.BlockProc,
+		miniblocksProc:      arguments.MiniblocksProc,
+		transactionsProc:    arguments.TransactionsProc,
+		statisticsProc:      arguments.StatisticsProc,
+		validatorsProc:      arguments.ValidatorsProc,
+		logsAndEventsProc:   arguments.LogsAndEventsProc,
+		operationsProc:      arguments.OperationsProc,
+		bulkRequestMaxSize:  arguments.BulkRequestMaxSize,
+		indexTokensHandler:  arguments.IndexTokensHandler,
+		numWritesInParallel: numWritesInParallel,
 	}
 
 	err = ei.init(arguments.UseKibana, arguments.IndexTemplates, arguments.IndexPolicies, arguments.ExtraMappings)
@@ -844,14 +853,12 @@ func (ei *elasticProcessor) isIndexEnabled(index string) bool {
 }
 
 func (ei *elasticProcessor) doBulkRequests(index string, buffSlice []*bytes.Buffer, shardID uint32) error {
-	nuParallelWrite := 15
-
 	jobs := make(chan *bytes.Buffer)
 	errs := make(chan error, len(buffSlice))
 	var wg sync.WaitGroup
 
 	// Start worker goroutines
-	for i := 0; i < nuParallelWrite; i++ {
+	for i := 0; i < ei.numWritesInParallel; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
