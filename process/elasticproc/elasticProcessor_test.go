@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/multiversx/mx-chain-core-go/core"
@@ -598,4 +601,121 @@ func TestElasticProcessor_IndexAlteredAccounts(t *testing.T) {
 	err := elasticSearchProc.indexAlteredAccounts(100, nil, nil, buffSlice, tagsCount, 0)
 	require.Nil(t, err)
 	require.True(t, called)
+}
+
+func TestElasticProcessor_DoBulkRequests_SuccessfulParallelProcessing(t *testing.T) {
+	arguments := createMockElasticProcessorArgs()
+	arguments.NumWritesInParallel = 3
+
+	processedBuffers := make(map[string]bool)
+	processedBuffersMutex := &sync.Mutex{}
+
+	arguments.DBClient = &mock.DatabaseWriterStub{
+		DoBulkRequestCalled: func(buff *bytes.Buffer, index string) error {
+			processedBuffersMutex.Lock()
+			processedBuffers[buff.String()] = true
+			processedBuffersMutex.Unlock()
+			return nil
+		},
+	}
+
+	elasticProc, _ := NewElasticProcessor(arguments)
+
+	// Create 5 test buffers
+	buffers := make([]*bytes.Buffer, 5)
+	for i := 0; i < 5; i++ {
+		buffers[i] = bytes.NewBufferString(fmt.Sprintf("test-buffer-%d", i))
+	}
+
+	err := elasticProc.doBulkRequests("test-index", buffers, 0)
+	require.Nil(t, err)
+
+	// Verify all buffers were processed
+	processedBuffersMutex.Lock()
+	defer processedBuffersMutex.Unlock()
+	require.Equal(t, 5, len(processedBuffers))
+	for i := 0; i < 5; i++ {
+		require.True(t, processedBuffers[fmt.Sprintf("test-buffer-%d", i)])
+	}
+}
+
+func TestElasticProcessor_DoBulkRequests_WorkerCancellationOnError(t *testing.T) {
+	arguments := createMockElasticProcessorArgs()
+	arguments.NumWritesInParallel = 3
+
+	processedBuffers := make(map[string]bool)
+	processedBuffersMutex := &sync.Mutex{}
+	expectedErr := errors.New("expected error")
+
+	arguments.DBClient = &mock.DatabaseWriterStub{
+		DoBulkRequestCalled: func(buff *bytes.Buffer, index string) error {
+			processedBuffersMutex.Lock()
+			processedBuffers[buff.String()] = true
+			processedBuffersMutex.Unlock()
+
+			if buff.String() == "test-buffer-1" {
+				return expectedErr
+			}
+			return nil
+		},
+	}
+
+	elasticProc, _ := NewElasticProcessor(arguments)
+
+	buffers := make([]*bytes.Buffer, 5)
+	for i := 0; i < 5; i++ {
+		buffers[i] = bytes.NewBufferString(fmt.Sprintf("test-buffer-%d", i))
+	}
+
+	err := elasticProc.doBulkRequests("test-index", buffers, 0)
+	require.Equal(t, expectedErr, err)
+
+	processedBuffersMutex.Lock()
+	defer processedBuffersMutex.Unlock()
+	require.True(t, len(processedBuffers) > 0)
+	require.True(t, processedBuffers["test-buffer-0"])
+	require.True(t, processedBuffers["test-buffer-1"])
+}
+
+func TestElasticProcessor_DoBulkRequests_DatabaseError(t *testing.T) {
+	arguments := createMockElasticProcessorArgs()
+	arguments.NumWritesInParallel = 20
+
+	expectedErr := errors.New("database connection error")
+	processedBuffers := make(map[string]bool)
+	processedBuffersMutex := &sync.Mutex{}
+
+	arguments.DBClient = &mock.DatabaseWriterStub{
+		DoBulkRequestCalled: func(buff *bytes.Buffer, index string) error {
+			split := strings.Split(buff.String(), "-")
+			bufferNum, _ := strconv.Atoi(split[2])
+			if bufferNum%3 == 0 {
+				return expectedErr
+			}
+
+			processedBuffersMutex.Lock()
+			processedBuffers[buff.String()] = true
+			processedBuffersMutex.Unlock()
+			return nil
+		},
+	}
+
+	elasticProc, _ := NewElasticProcessor(arguments)
+	buffers := make([]*bytes.Buffer, 6)
+	for i := 0; i < 6; i++ {
+		buffers[i] = bytes.NewBufferString(fmt.Sprintf("test-buffer-%d", i+1))
+	}
+
+	err := elasticProc.doBulkRequests("test-index", buffers, 0)
+	require.Equal(t, expectedErr, err)
+
+	processedBuffersMutex.Lock()
+	defer processedBuffersMutex.Unlock()
+	require.True(t, len(processedBuffers) > 0)
+	require.True(t, processedBuffers["test-buffer-1"])
+	require.True(t, processedBuffers["test-buffer-2"])
+	require.False(t, processedBuffers["test-buffer-3"])
+	require.True(t, processedBuffers["test-buffer-4"])
+	require.True(t, processedBuffers["test-buffer-5"])
+	require.False(t, processedBuffers["test-buffer-6"])
 }

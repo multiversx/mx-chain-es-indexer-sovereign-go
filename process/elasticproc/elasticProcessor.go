@@ -90,6 +90,7 @@ func NewElasticProcessor(arguments *ArgElasticProcessor) (*elasticProcessor, err
 	}
 	numWritesInParallel := arguments.NumWritesInParallel
 	if numWritesInParallel <= 0 {
+		log.Warn("elasticProcessor.NewElasticProcessor: provided num writes in parallel is invalid, will set value to 1")
 		numWritesInParallel = 1
 	}
 
@@ -854,10 +855,10 @@ func (ei *elasticProcessor) isIndexEnabled(index string) bool {
 
 func (ei *elasticProcessor) doBulkRequests(index string, buffSlice []*bytes.Buffer, shardID uint32) error {
 	jobs := make(chan *bytes.Buffer)
-	errs := make(chan error, len(buffSlice))
+	errCh := make(chan error, len(buffSlice))
+
 	var wg sync.WaitGroup
 
-	// Start worker goroutines
 	for i := 0; i < ei.numWritesInParallel; i++ {
 		wg.Add(1)
 		go func() {
@@ -865,23 +866,26 @@ func (ei *elasticProcessor) doBulkRequests(index string, buffSlice []*bytes.Buff
 			for buf := range jobs {
 				ctx := context.WithValue(context.Background(), request.ContextKey, request.ExtendTopicWithShardID(request.BulkTopic, shardID))
 				if err := ei.elasticClient.DoBulkRequest(ctx, buf, index); err != nil {
-					errs <- err
-					return
+					errCh <- err
 				}
 			}
 		}()
 	}
 
-	for _, buf := range buffSlice {
-		jobs <- buf
-	}
-	close(jobs)
+	go func() {
+		for _, buf := range buffSlice {
+			jobs <- buf
+		}
+		close(jobs)
+	}()
 
 	wg.Wait()
-	close(errs)
+	close(errCh)
 
-	for err := range errs {
-		return err
+	for err := range errCh {
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
