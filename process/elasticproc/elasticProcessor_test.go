@@ -649,13 +649,14 @@ func TestElasticProcessor_DoBulkRequests_WorkerCancellationOnError(t *testing.T)
 
 	arguments.DBClient = &mock.DatabaseWriterStub{
 		DoBulkRequestCalled: func(buff *bytes.Buffer, index string) error {
+			if buff.String() == "test-buffer-1" {
+				return expectedErr
+			}
+
 			processedBuffersMutex.Lock()
 			processedBuffers[buff.String()] = true
 			processedBuffersMutex.Unlock()
 
-			if buff.String() == "test-buffer-1" {
-				return expectedErr
-			}
 			return nil
 		},
 	}
@@ -674,7 +675,10 @@ func TestElasticProcessor_DoBulkRequests_WorkerCancellationOnError(t *testing.T)
 	defer processedBuffersMutex.Unlock()
 	require.True(t, len(processedBuffers) > 0)
 	require.True(t, processedBuffers["test-buffer-0"])
-	require.True(t, processedBuffers["test-buffer-1"])
+	require.False(t, processedBuffers["test-buffer-1"])
+	require.True(t, processedBuffers["test-buffer-2"])
+	require.True(t, processedBuffers["test-buffer-3"])
+	require.True(t, processedBuffers["test-buffer-4"])
 }
 
 func TestElasticProcessor_DoBulkRequests_DatabaseError(t *testing.T) {
