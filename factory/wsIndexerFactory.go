@@ -90,6 +90,7 @@ func createDataIndexer(
 		UseKibana:                clusterCfg.Config.ElasticCluster.UseKibana,
 		Denomination:             cfg.Config.Economics.Denomination,
 		BulkRequestMaxSize:       clusterCfg.Config.ElasticCluster.BulkRequestMaxSizeInBytes,
+		NumWritesInParallel:      clusterCfg.Config.ElasticCluster.NumWritesInParallel,
 		Url:                      clusterCfg.Config.ElasticCluster.URL,
 		UserName:                 clusterCfg.Config.ElasticCluster.UserName,
 		Password:                 clusterCfg.Config.ElasticCluster.Password,
