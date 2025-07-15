@@ -4,13 +4,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/multiversx/mx-chain-core-go/data/api"
-	"strconv"
-	"time"
-
 	"github.com/multiversx/mx-chain-core-go/core"
 	"github.com/multiversx/mx-chain-core-go/core/check"
 	coreData "github.com/multiversx/mx-chain-core-go/data"
+	"github.com/multiversx/mx-chain-core-go/data/api"
 	"github.com/multiversx/mx-chain-core-go/data/block"
 	nodeBlock "github.com/multiversx/mx-chain-core-go/data/block"
 	"github.com/multiversx/mx-chain-core-go/data/outport"
@@ -20,6 +17,7 @@ import (
 	indexer "github.com/multiversx/mx-chain-es-indexer-go/process/dataindexer"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/converters"
 	logger "github.com/multiversx/mx-chain-logger-go"
+	"strconv"
 )
 
 const (
@@ -90,13 +88,14 @@ func (bp *blockProcessor) PrepareBlockForDB(obh *outport.OutportBlockWithHeader)
 		Hash:                  hex.EncodeToString(obh.BlockData.HeaderHash),
 		MiniBlocksHashes:      miniblocksHashes,
 		NotarizedBlocksHashes: obh.NotarizedHeadersHashes,
-		Proposer:              obh.LeaderIndex,
+		Proposer:              getLeaderIndex(obh),
 		ProposerBlsKey:        hex.EncodeToString(obh.LeaderBLSKey),
 		Validators:            obh.SignersIndexes,
 		PubKeyBitmap:          hex.EncodeToString(obh.Header.GetPubKeysBitmap()),
 		Size:                  int64(blockSizeInBytes),
 		SizeTxs:               int64(sizeTxs),
-		Timestamp:             time.Duration(obh.Header.GetTimeStamp()),
+		Timestamp:             obh.Header.GetTimeStamp(),
+		TimestampMs:           obh.OutportBlock.BlockData.GetTimestampMs(),
 		TxCount:               numTxs,
 		NotarizedTxsCount:     notarizedTxs,
 		StateRootHash:         hex.EncodeToString(obh.Header.GetRootHash()),
@@ -140,6 +139,18 @@ func (bp *blockProcessor) PrepareBlockForDB(obh *outport.OutportBlockWithHeader)
 	addProofs(elasticBlock, obh)
 
 	return elasticBlock, nil
+}
+
+func getLeaderIndex(obh *outport.OutportBlockWithHeader) uint64 {
+	if obh.BlockData.HeaderProof != nil {
+		return obh.LeaderIndex
+	}
+
+	if len(obh.SignersIndexes) > 0 {
+		return obh.SignersIndexes[0]
+	}
+
+	return 0
 }
 
 func addProofs(elasticBlock *data.Block, obh *outport.OutportBlockWithHeader) {

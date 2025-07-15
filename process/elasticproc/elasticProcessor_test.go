@@ -28,6 +28,7 @@ import (
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/operations"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/statistics"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/tags"
+	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/templatesAndPolicies"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/transactions"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/validators"
 )
@@ -93,6 +94,7 @@ func createMockElasticProcessorArgs() *ArgElasticProcessor {
 		BlockProc:           bp,
 		LogsAndEventsProc:   lp,
 		OperationsProc:      op,
+		MappingsHandler:     templatesAndPolicies.NewTemplatesAndPolicyReader(),
 		IndexTokensHandler:  &IndexTokenHandlerMock{},
 		NumWritesInParallel: 1,
 	}
@@ -207,6 +209,15 @@ func TestNewElasticProcessor(t *testing.T) {
 				return arguments
 			},
 			exErr: dataindexer.ErrNilTransactionsHandler,
+		},
+		{
+			name: "NilMappingsHandler",
+			args: func() *ArgElasticProcessor {
+				arguments := createMockElasticProcessorArgs()
+				arguments.MappingsHandler = nil
+				return arguments
+			},
+			exErr: dataindexer.ErrNilMappingsHandler,
 		},
 		{
 			name: "InitError",
@@ -421,7 +432,7 @@ func TestElasticProcessor_SaveMiniblocks(t *testing.T) {
 	body := &dataBlock.Body{MiniBlocks: dataBlock.MiniBlockSlice{
 		{SenderShardID: 0, ReceiverShardID: 1},
 	}}
-	err := elasticProc.SaveMiniblocks(header, body.MiniBlocks)
+	err := elasticProc.SaveMiniblocks(header, body.MiniBlocks, 0)
 	require.Equal(t, localErr, err)
 }
 
@@ -480,7 +491,7 @@ func TestElasticProcessor_RemoveTransactions(t *testing.T) {
 				called = true
 			} else {
 				require.Equal(t,
-					`{"query": {"bool": {"must": [{"match": {"shardID": {"query": 4294967295,"operator": "AND"}}},{"match": {"timestamp": {"query": "0","operator": "AND"}}}]}}}`,
+					`{"query": {"bool": {"must": [{"match": {"shardID": {"query": 4294967295,"operator": "AND"}}},{"match": {"timestampMs": {"query": "0","operator": "AND"}}}]}}}`,
 					body.String(),
 				)
 			}
@@ -515,7 +526,7 @@ func TestElasticProcessor_RemoveTransactions(t *testing.T) {
 		},
 	}
 
-	err := elasticSearchProc.RemoveTransactions(header, blk)
+	err := elasticSearchProc.RemoveTransactions(header, blk, 0)
 	require.Nil(t, err)
 	require.True(t, called)
 }
@@ -598,7 +609,7 @@ func TestElasticProcessor_IndexAlteredAccounts(t *testing.T) {
 
 	buffSlice := data.NewBufferSlice(data.DefaultMaxBulkSize)
 	tagsCount := tags.NewTagsCount()
-	err := elasticSearchProc.indexAlteredAccounts(100, nil, nil, buffSlice, tagsCount, 0)
+	err := elasticSearchProc.indexAlteredAccounts(nil, nil, buffSlice, tagsCount, 0, 0)
 	require.Nil(t, err)
 	require.True(t, called)
 }
