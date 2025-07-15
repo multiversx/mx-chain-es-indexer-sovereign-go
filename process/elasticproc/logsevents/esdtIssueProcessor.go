@@ -1,9 +1,11 @@
 package logsevents
 
 import (
-	"github.com/multiversx/mx-chain-core-go/core"
-	"github.com/multiversx/mx-chain-es-indexer-go/data"
 	"math/big"
+
+	"github.com/multiversx/mx-chain-core-go/core"
+
+	"github.com/multiversx/mx-chain-es-indexer-go/data"
 )
 
 const (

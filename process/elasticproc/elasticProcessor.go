@@ -65,21 +65,22 @@ type ArgElasticProcessor struct {
 }
 
 type elasticProcessor struct {
-	bulkRequestMaxSize int
-	importDB           bool
-	enabledIndexes     map[string]struct{}
-	mutex              sync.RWMutex
-	elasticClient      DatabaseClientHandler
-	accountsProc       DBAccountHandler
-	blockProc          DBBlockHandler
-	transactionsProc   DBTransactionsHandler
-	miniblocksProc     DBMiniblocksHandler
-	statisticsProc     DBStatisticsHandler
-	validatorsProc     DBValidatorsHandler
-	logsAndEventsProc  DBLogsAndEventsHandler
-	operationsProc     OperationsHandler
-	mappingsHandler    TemplatesAndPoliciesHandler
-	indexTokensHandler IndexTokensHandler
+	numWritesInParallel int
+	bulkRequestMaxSize  int
+	importDB            bool
+	enabledIndexes      map[string]struct{}
+	mutex               sync.RWMutex
+	elasticClient       DatabaseClientHandler
+	accountsProc        DBAccountHandler
+	blockProc           DBBlockHandler
+	transactionsProc    DBTransactionsHandler
+	miniblocksProc      DBMiniblocksHandler
+	statisticsProc      DBStatisticsHandler
+	validatorsProc      DBValidatorsHandler
+	logsAndEventsProc   DBLogsAndEventsHandler
+	operationsProc      OperationsHandler
+	mappingsHandler     TemplatesAndPoliciesHandler
+	indexTokensHandler  IndexTokensHandler
 }
 
 // NewElasticProcessor handles Elasticsearch operations such as initialization, adding, modifying or removing data

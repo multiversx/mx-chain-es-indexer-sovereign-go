@@ -132,10 +132,7 @@ func CreateElasticProcessor(arguments ArgElasticProcessorFactory) (dataindexer.E
 		ImportDB:           arguments.ImportDB,
 		Version:            arguments.Version,
 		MappingsHandler:    templatesAndPoliciesReader,
-		IndexTemplates:      indexTemplates,
-		IndexPolicies:       indexPolicies,
-		ExtraMappings:       extraMappings,
-		IndexTokensHandler:  arguments.IndexTokensHandler,
+		IndexTokensHandler: arguments.IndexTokensHandler,
 	}
 
 	return elasticproc.NewElasticProcessor(args)
