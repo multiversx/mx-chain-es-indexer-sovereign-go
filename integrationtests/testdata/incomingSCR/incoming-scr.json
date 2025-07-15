@@ -14,6 +14,7 @@
   "originalTxHash": "",
   "callType": "0",
   "timestamp": 2500,
+  "timestampMs":2.5e+06,
   "tokens": [
     "TKN18-1a2b3c",
     "TKN12-1c2b3a",
