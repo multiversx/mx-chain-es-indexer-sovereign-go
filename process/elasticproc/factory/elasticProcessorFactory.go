@@ -38,6 +38,7 @@ type ArgElasticProcessorFactory struct {
 	Version                  string
 	Denomination             int
 	BulkRequestMaxSize       int
+	NumWritesInParallel      int
 	UseKibana                bool
 	ImportDB                 bool
 	TxHashExtractor          transactions.TxHashExtractor
@@ -124,24 +125,25 @@ func CreateElasticProcessor(arguments ArgElasticProcessorFactory) (dataindexer.E
 	}
 
 	args := &elasticproc.ArgElasticProcessor{
-		BulkRequestMaxSize: arguments.BulkRequestMaxSize,
-		TransactionsProc:   txsProc,
-		AccountsProc:       accountsProc,
-		BlockProc:          blockProcHandler,
-		MiniblocksProc:     miniblocksProc,
-		ValidatorsProc:     validatorsProc,
-		StatisticsProc:     generalInfoProc,
-		LogsAndEventsProc:  logsAndEventsProc,
-		DBClient:           arguments.DBClient,
-		EnabledIndexes:     enabledIndexesMap,
-		UseKibana:          arguments.UseKibana,
-		IndexTemplates:     indexTemplates,
-		IndexPolicies:      indexPolicies,
-		ExtraMappings:      extraMappings,
-		OperationsProc:     operationsProc,
-		ImportDB:           arguments.ImportDB,
-		Version:            arguments.Version,
-		IndexTokensHandler: arguments.IndexTokensHandler,
+		NumWritesInParallel: arguments.NumWritesInParallel,
+		BulkRequestMaxSize:  arguments.BulkRequestMaxSize,
+		TransactionsProc:    txsProc,
+		AccountsProc:        accountsProc,
+		BlockProc:           blockProcHandler,
+		MiniblocksProc:      miniblocksProc,
+		ValidatorsProc:      validatorsProc,
+		StatisticsProc:      generalInfoProc,
+		LogsAndEventsProc:   logsAndEventsProc,
+		DBClient:            arguments.DBClient,
+		EnabledIndexes:      enabledIndexesMap,
+		UseKibana:           arguments.UseKibana,
+		IndexTemplates:      indexTemplates,
+		IndexPolicies:       indexPolicies,
+		ExtraMappings:       extraMappings,
+		OperationsProc:      operationsProc,
+		ImportDB:            arguments.ImportDB,
+		Version:             arguments.Version,
+		IndexTokensHandler:  arguments.IndexTokensHandler,
 	}
 
 	return elasticproc.NewElasticProcessor(args)
