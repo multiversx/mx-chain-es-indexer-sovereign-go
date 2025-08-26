@@ -28,6 +28,7 @@ import (
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/operations"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/statistics"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/tags"
+	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/templatesAndPolicies"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/transactions"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/validators"
 )
@@ -68,7 +69,7 @@ func createMockElasticProcessorArgs() *ArgElasticProcessor {
 	balanceConverter, _ := converters.NewBalanceConverter(10)
 
 	acp, _ := accounts.NewAccountsProcessor(&mock.PubkeyConverterMock{}, balanceConverter)
-	bp, _ := block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{})
+	bp, _ := block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{}, &mock.PubkeyConverterMock{})
 	mp, _ := miniblocks.NewMiniblocksProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{})
 	vp, _ := validators.NewValidatorsProcessor(mock.NewPubkeyConverterMock(32), 0)
 	args := logsevents.ArgsLogsAndEventsProcessor{
@@ -93,6 +94,7 @@ func createMockElasticProcessorArgs() *ArgElasticProcessor {
 		BlockProc:           bp,
 		LogsAndEventsProc:   lp,
 		OperationsProc:      op,
+		MappingsHandler:     templatesAndPolicies.NewTemplatesAndPolicyReader(),
 		IndexTokensHandler:  &IndexTokenHandlerMock{},
 		NumWritesInParallel: 1,
 	}
@@ -209,6 +211,15 @@ func TestNewElasticProcessor(t *testing.T) {
 			exErr: dataindexer.ErrNilTransactionsHandler,
 		},
 		{
+			name: "NilMappingsHandler",
+			args: func() *ArgElasticProcessor {
+				arguments := createMockElasticProcessorArgs()
+				arguments.MappingsHandler = nil
+				return arguments
+			},
+			exErr: dataindexer.ErrNilMappingsHandler,
+		},
+		{
 			name: "InitError",
 			args: func() *ArgElasticProcessor {
 				arguments := createMockElasticProcessorArgs()
@@ -252,7 +263,7 @@ func TestElasticProcessor_RemoveHeader(t *testing.T) {
 		},
 	}
 
-	args.BlockProc, _ = block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{})
+	args.BlockProc, _ = block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{}, &mock.PubkeyConverterMock{})
 
 	elasticProc, err := NewElasticProcessor(args)
 	require.NoError(t, err)
@@ -337,7 +348,7 @@ func TestElasticseachDatabaseSaveHeader_RequestError(t *testing.T) {
 			return localErr
 		},
 	}
-	arguments.BlockProc, _ = block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{})
+	arguments.BlockProc, _ = block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{}, &mock.PubkeyConverterMock{})
 	elasticDatabase := newElasticsearchProcessor(dbWriter, arguments)
 
 	err := elasticDatabase.SaveHeader(createEmptyOutportBlockWithHeader())
@@ -421,7 +432,7 @@ func TestElasticProcessor_SaveMiniblocks(t *testing.T) {
 	body := &dataBlock.Body{MiniBlocks: dataBlock.MiniBlockSlice{
 		{SenderShardID: 0, ReceiverShardID: 1},
 	}}
-	err := elasticProc.SaveMiniblocks(header, body.MiniBlocks)
+	err := elasticProc.SaveMiniblocks(header, body.MiniBlocks, 0)
 	require.Equal(t, localErr, err)
 }
 
@@ -480,7 +491,7 @@ func TestElasticProcessor_RemoveTransactions(t *testing.T) {
 				called = true
 			} else {
 				require.Equal(t,
-					`{"query": {"bool": {"must": [{"match": {"shardID": {"query": 4294967295,"operator": "AND"}}},{"match": {"timestamp": {"query": "0","operator": "AND"}}}]}}}`,
+					`{"query": {"bool": {"must": [{"match": {"shardID": {"query": 4294967295,"operator": "AND"}}},{"match": {"timestampMs": {"query": "0","operator": "AND"}}}]}}}`,
 					body.String(),
 				)
 			}
@@ -515,7 +526,7 @@ func TestElasticProcessor_RemoveTransactions(t *testing.T) {
 		},
 	}
 
-	err := elasticSearchProc.RemoveTransactions(header, blk)
+	err := elasticSearchProc.RemoveTransactions(header, blk, 0)
 	require.Nil(t, err)
 	require.True(t, called)
 }
@@ -598,7 +609,7 @@ func TestElasticProcessor_IndexAlteredAccounts(t *testing.T) {
 
 	buffSlice := data.NewBufferSlice(data.DefaultMaxBulkSize)
 	tagsCount := tags.NewTagsCount()
-	err := elasticSearchProc.indexAlteredAccounts(100, nil, nil, buffSlice, tagsCount, 0)
+	err := elasticSearchProc.indexAlteredAccounts(nil, nil, buffSlice, tagsCount, 0, 0)
 	require.Nil(t, err)
 	require.True(t, called)
 }
