@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/multiversx/mx-chain-core-go/core"
@@ -25,22 +28,24 @@ import (
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/operations"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/statistics"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/tags"
+	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/templatesAndPolicies"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/transactions"
 	"github.com/multiversx/mx-chain-es-indexer-go/process/elasticproc/validators"
 )
 
 func newElasticsearchProcessor(elasticsearchWriter DatabaseClientHandler, arguments *ArgElasticProcessor) *elasticProcessor {
 	return &elasticProcessor{
-		elasticClient:      elasticsearchWriter,
-		enabledIndexes:     arguments.EnabledIndexes,
-		blockProc:          arguments.BlockProc,
-		transactionsProc:   arguments.TransactionsProc,
-		miniblocksProc:     arguments.MiniblocksProc,
-		accountsProc:       arguments.AccountsProc,
-		validatorsProc:     arguments.ValidatorsProc,
-		statisticsProc:     arguments.StatisticsProc,
-		logsAndEventsProc:  arguments.LogsAndEventsProc,
-		indexTokensHandler: arguments.IndexTokensHandler,
+		elasticClient:       elasticsearchWriter,
+		enabledIndexes:      arguments.EnabledIndexes,
+		blockProc:           arguments.BlockProc,
+		transactionsProc:    arguments.TransactionsProc,
+		miniblocksProc:      arguments.MiniblocksProc,
+		accountsProc:        arguments.AccountsProc,
+		validatorsProc:      arguments.ValidatorsProc,
+		statisticsProc:      arguments.StatisticsProc,
+		logsAndEventsProc:   arguments.LogsAndEventsProc,
+		indexTokensHandler:  arguments.IndexTokensHandler,
+		numWritesInParallel: 1,
 	}
 }
 
@@ -64,7 +69,7 @@ func createMockElasticProcessorArgs() *ArgElasticProcessor {
 	balanceConverter, _ := converters.NewBalanceConverter(10)
 
 	acp, _ := accounts.NewAccountsProcessor(&mock.PubkeyConverterMock{}, balanceConverter)
-	bp, _ := block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{})
+	bp, _ := block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{}, &mock.PubkeyConverterMock{})
 	mp, _ := miniblocks.NewMiniblocksProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{})
 	vp, _ := validators.NewValidatorsProcessor(mock.NewPubkeyConverterMock(32), 0)
 	args := logsevents.ArgsLogsAndEventsProcessor{
@@ -81,15 +86,17 @@ func createMockElasticProcessorArgs() *ArgElasticProcessor {
 		EnabledIndexes: map[string]struct{}{
 			dataindexer.BlockIndex: {}, dataindexer.TransactionsIndex: {}, dataindexer.MiniblocksIndex: {}, dataindexer.ValidatorsIndex: {}, dataindexer.RoundsIndex: {}, dataindexer.AccountsIndex: {}, dataindexer.RatingIndex: {}, dataindexer.AccountsHistoryIndex: {},
 		},
-		ValidatorsProc:     vp,
-		StatisticsProc:     statistics.NewStatisticsProcessor(),
-		TransactionsProc:   &mock.DBTransactionProcessorStub{},
-		MiniblocksProc:     mp,
-		AccountsProc:       acp,
-		BlockProc:          bp,
-		LogsAndEventsProc:  lp,
-		OperationsProc:     op,
-		IndexTokensHandler: &IndexTokenHandlerMock{},
+		ValidatorsProc:      vp,
+		StatisticsProc:      statistics.NewStatisticsProcessor(),
+		TransactionsProc:    &mock.DBTransactionProcessorStub{},
+		MiniblocksProc:      mp,
+		AccountsProc:        acp,
+		BlockProc:           bp,
+		LogsAndEventsProc:   lp,
+		OperationsProc:      op,
+		MappingsHandler:     templatesAndPolicies.NewTemplatesAndPolicyReader(),
+		IndexTokensHandler:  &IndexTokenHandlerMock{},
+		NumWritesInParallel: 1,
 	}
 }
 
@@ -204,6 +211,15 @@ func TestNewElasticProcessor(t *testing.T) {
 			exErr: dataindexer.ErrNilTransactionsHandler,
 		},
 		{
+			name: "NilMappingsHandler",
+			args: func() *ArgElasticProcessor {
+				arguments := createMockElasticProcessorArgs()
+				arguments.MappingsHandler = nil
+				return arguments
+			},
+			exErr: dataindexer.ErrNilMappingsHandler,
+		},
+		{
 			name: "InitError",
 			args: func() *ArgElasticProcessor {
 				arguments := createMockElasticProcessorArgs()
@@ -247,7 +263,7 @@ func TestElasticProcessor_RemoveHeader(t *testing.T) {
 		},
 	}
 
-	args.BlockProc, _ = block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{})
+	args.BlockProc, _ = block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{}, &mock.PubkeyConverterMock{})
 
 	elasticProc, err := NewElasticProcessor(args)
 	require.NoError(t, err)
@@ -332,7 +348,7 @@ func TestElasticseachDatabaseSaveHeader_RequestError(t *testing.T) {
 			return localErr
 		},
 	}
-	arguments.BlockProc, _ = block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{})
+	arguments.BlockProc, _ = block.NewBlockProcessor(&mock.HasherMock{}, &mock.MarshalizerMock{}, &mock.PubkeyConverterMock{})
 	elasticDatabase := newElasticsearchProcessor(dbWriter, arguments)
 
 	err := elasticDatabase.SaveHeader(createEmptyOutportBlockWithHeader())
@@ -416,7 +432,7 @@ func TestElasticProcessor_SaveMiniblocks(t *testing.T) {
 	body := &dataBlock.Body{MiniBlocks: dataBlock.MiniBlockSlice{
 		{SenderShardID: 0, ReceiverShardID: 1},
 	}}
-	err := elasticProc.SaveMiniblocks(header, body.MiniBlocks)
+	err := elasticProc.SaveMiniblocks(header, body.MiniBlocks, 0)
 	require.Equal(t, localErr, err)
 }
 
@@ -475,7 +491,7 @@ func TestElasticProcessor_RemoveTransactions(t *testing.T) {
 				called = true
 			} else {
 				require.Equal(t,
-					`{"query": {"bool": {"must": [{"match": {"shardID": {"query": 4294967295,"operator": "AND"}}},{"match": {"timestamp": {"query": "0","operator": "AND"}}}]}}}`,
+					`{"query": {"bool": {"must": [{"match": {"shardID": {"query": 4294967295,"operator": "AND"}}},{"match": {"timestampMs": {"query": "0","operator": "AND"}}}]}}}`,
 					body.String(),
 				)
 			}
@@ -510,7 +526,7 @@ func TestElasticProcessor_RemoveTransactions(t *testing.T) {
 		},
 	}
 
-	err := elasticSearchProc.RemoveTransactions(header, blk)
+	err := elasticSearchProc.RemoveTransactions(header, blk, 0)
 	require.Nil(t, err)
 	require.True(t, called)
 }
@@ -593,7 +609,128 @@ func TestElasticProcessor_IndexAlteredAccounts(t *testing.T) {
 
 	buffSlice := data.NewBufferSlice(data.DefaultMaxBulkSize)
 	tagsCount := tags.NewTagsCount()
-	err := elasticSearchProc.indexAlteredAccounts(100, nil, nil, buffSlice, tagsCount, 0)
+	err := elasticSearchProc.indexAlteredAccounts(nil, nil, buffSlice, tagsCount, 0, 0)
 	require.Nil(t, err)
 	require.True(t, called)
+}
+
+func TestElasticProcessor_DoBulkRequests_SuccessfulParallelProcessing(t *testing.T) {
+	arguments := createMockElasticProcessorArgs()
+	arguments.NumWritesInParallel = 3
+
+	processedBuffers := make(map[string]bool)
+	processedBuffersMutex := &sync.Mutex{}
+
+	arguments.DBClient = &mock.DatabaseWriterStub{
+		DoBulkRequestCalled: func(buff *bytes.Buffer, index string) error {
+			processedBuffersMutex.Lock()
+			processedBuffers[buff.String()] = true
+			processedBuffersMutex.Unlock()
+			return nil
+		},
+	}
+
+	elasticProc, _ := NewElasticProcessor(arguments)
+
+	// Create 5 test buffers
+	buffers := make([]*bytes.Buffer, 5)
+	for i := 0; i < 5; i++ {
+		buffers[i] = bytes.NewBufferString(fmt.Sprintf("test-buffer-%d", i))
+	}
+
+	err := elasticProc.doBulkRequests("test-index", buffers, 0)
+	require.Nil(t, err)
+
+	// Verify all buffers were processed
+	processedBuffersMutex.Lock()
+	defer processedBuffersMutex.Unlock()
+	require.Equal(t, 5, len(processedBuffers))
+	for i := 0; i < 5; i++ {
+		require.True(t, processedBuffers[fmt.Sprintf("test-buffer-%d", i)])
+	}
+}
+
+func TestElasticProcessor_DoBulkRequests_WorkerCancellationOnError(t *testing.T) {
+	arguments := createMockElasticProcessorArgs()
+	arguments.NumWritesInParallel = 3
+
+	processedBuffers := make(map[string]bool)
+	processedBuffersMutex := &sync.Mutex{}
+	expectedErr := errors.New("expected error")
+
+	arguments.DBClient = &mock.DatabaseWriterStub{
+		DoBulkRequestCalled: func(buff *bytes.Buffer, index string) error {
+			if buff.String() == "test-buffer-1" {
+				return expectedErr
+			}
+
+			processedBuffersMutex.Lock()
+			processedBuffers[buff.String()] = true
+			processedBuffersMutex.Unlock()
+
+			return nil
+		},
+	}
+
+	elasticProc, _ := NewElasticProcessor(arguments)
+
+	buffers := make([]*bytes.Buffer, 5)
+	for i := 0; i < 5; i++ {
+		buffers[i] = bytes.NewBufferString(fmt.Sprintf("test-buffer-%d", i))
+	}
+
+	err := elasticProc.doBulkRequests("test-index", buffers, 0)
+	require.Equal(t, expectedErr, err)
+
+	processedBuffersMutex.Lock()
+	defer processedBuffersMutex.Unlock()
+	require.True(t, len(processedBuffers) > 0)
+	require.True(t, processedBuffers["test-buffer-0"])
+	require.False(t, processedBuffers["test-buffer-1"])
+	require.True(t, processedBuffers["test-buffer-2"])
+	require.True(t, processedBuffers["test-buffer-3"])
+	require.True(t, processedBuffers["test-buffer-4"])
+}
+
+func TestElasticProcessor_DoBulkRequests_DatabaseError(t *testing.T) {
+	arguments := createMockElasticProcessorArgs()
+	arguments.NumWritesInParallel = 20
+
+	expectedErr := errors.New("database connection error")
+	processedBuffers := make(map[string]bool)
+	processedBuffersMutex := &sync.Mutex{}
+
+	arguments.DBClient = &mock.DatabaseWriterStub{
+		DoBulkRequestCalled: func(buff *bytes.Buffer, index string) error {
+			split := strings.Split(buff.String(), "-")
+			bufferNum, _ := strconv.Atoi(split[2])
+			if bufferNum%3 == 0 {
+				return expectedErr
+			}
+
+			processedBuffersMutex.Lock()
+			processedBuffers[buff.String()] = true
+			processedBuffersMutex.Unlock()
+			return nil
+		},
+	}
+
+	elasticProc, _ := NewElasticProcessor(arguments)
+	buffers := make([]*bytes.Buffer, 6)
+	for i := 0; i < 6; i++ {
+		buffers[i] = bytes.NewBufferString(fmt.Sprintf("test-buffer-%d", i+1))
+	}
+
+	err := elasticProc.doBulkRequests("test-index", buffers, 0)
+	require.Equal(t, expectedErr, err)
+
+	processedBuffersMutex.Lock()
+	defer processedBuffersMutex.Unlock()
+	require.True(t, len(processedBuffers) > 0)
+	require.True(t, processedBuffers["test-buffer-1"])
+	require.True(t, processedBuffers["test-buffer-2"])
+	require.False(t, processedBuffers["test-buffer-3"])
+	require.True(t, processedBuffers["test-buffer-4"])
+	require.True(t, processedBuffers["test-buffer-5"])
+	require.False(t, processedBuffers["test-buffer-6"])
 }

@@ -1,7 +1,7 @@
 package data
 
 import (
-	"time"
+	"github.com/multiversx/mx-chain-core-go/data/api"
 )
 
 // Block is a structure containing all the fields that need
@@ -18,11 +18,12 @@ type Block struct {
 	MiniBlocksDetails     []*MiniBlocksDetails   `json:"miniBlocksDetails,omitempty"`
 	NotarizedBlocksHashes []string               `json:"notarizedBlocksHashes"`
 	Proposer              uint64                 `json:"proposer"`
-	Validators            []uint64               `json:"validators"`
+	Validators            []uint64               `json:"validators,omitempty"`
 	PubKeyBitmap          string                 `json:"pubKeyBitmap"`
 	Size                  int64                  `json:"size"`
 	SizeTxs               int64                  `json:"sizeTxs"`
-	Timestamp             time.Duration          `json:"timestamp"`
+	Timestamp             uint64                 `json:"timestamp"`
+	TimestampMs           uint64                 `json:"timestampMs,omitempty"`
 	StateRootHash         string                 `json:"stateRootHash"`
 	PrevHash              string                 `json:"prevHash"`
 	ShardID               uint32                 `json:"shardId"`
@@ -39,6 +40,7 @@ type Block struct {
 	MaxGasLimit           uint64                 `json:"maxGasLimit"`
 	ScheduledData         *ScheduledData         `json:"scheduledData,omitempty"`
 	EpochStartShardsData  []*EpochStartShardData `json:"epochStartShardsData,omitempty"`
+	Proof                 *api.HeaderProof       `json:"proof,omitempty"`
 	RandSeed              string                 `json:"randSeed,omitempty"`
 	PrevRandSeed          string                 `json:"prevRandSeed,omitempty"`
 	Signature             string                 `json:"signature,omitempty"`
@@ -47,6 +49,7 @@ type Block struct {
 	SoftwareVersion       string                 `json:"softwareVersion,omitempty"`
 	ReceiptsHash          string                 `json:"receiptsHash,omitempty"`
 	Reserved              []byte                 `json:"reserved,omitempty"`
+	ProposerBlsKey        string                 `json:"proposerBlsKey,omitempty"`
 }
 
 // MiniBlocksDetails is a structure that hold information about mini-blocks execution details
@@ -100,14 +103,15 @@ type EpochStartShardData struct {
 
 // Miniblock is a structure containing miniblock information
 type Miniblock struct {
-	Hash                        string        `json:"hash,omitempty"`
-	SenderShardID               uint32        `json:"senderShard"`
-	ReceiverShardID             uint32        `json:"receiverShard"`
-	SenderBlockHash             string        `json:"senderBlockHash,omitempty"`
-	ReceiverBlockHash           string        `json:"receiverBlockHash,omitempty"`
-	Type                        string        `json:"type"`
-	ProcessingTypeOnSource      string        `json:"procTypeS,omitempty"`
-	ProcessingTypeOnDestination string        `json:"procTypeD,omitempty"`
-	Timestamp                   time.Duration `json:"timestamp"`
-	Reserved                    []byte        `json:"reserved,omitempty"`
+	Hash                        string `json:"hash,omitempty"`
+	SenderShardID               uint32 `json:"senderShard"`
+	ReceiverShardID             uint32 `json:"receiverShard"`
+	SenderBlockHash             string `json:"senderBlockHash,omitempty"`
+	ReceiverBlockHash           string `json:"receiverBlockHash,omitempty"`
+	Type                        string `json:"type"`
+	ProcessingTypeOnSource      string `json:"procTypeS,omitempty"`
+	ProcessingTypeOnDestination string `json:"procTypeD,omitempty"`
+	Timestamp                   uint64 `json:"timestamp"`
+	TimestampMs                 uint64 `json:"timestampMs,omitempty"`
+	Reserved                    []byte `json:"reserved,omitempty"`
 }

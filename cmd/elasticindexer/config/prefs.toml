@@ -18,11 +18,11 @@
         acknowledge-timeout-in-seconds = 50
 
     [config.elastic-cluster]
-        use-kibana = false
         url = "http://localhost:9200"
         username = ""
         password = ""
-        bulk-request-max-size-in-bytes = 4194304 # 4MB
+        bulk-request-max-size-in-bytes = 512000 # 0.5 mb
+        num-writes-in-parallel = 5
 
     # Configuration for main chain elastic cluster
     # Used by the sovereign chain indexer to index incoming new tokens properties
