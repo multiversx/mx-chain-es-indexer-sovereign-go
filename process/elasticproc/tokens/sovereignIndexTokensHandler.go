@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/multiversx/mx-chain-core-go/core"
 	"github.com/multiversx/mx-chain-core-go/data/esdt"
+	"github.com/multiversx/mx-chain-core-go/data/sovereign/dto"
 
 	"github.com/multiversx/mx-chain-es-indexer-go/data"
 	indexerdata "github.com/multiversx/mx-chain-es-indexer-go/process/dataindexer"
@@ -56,7 +56,7 @@ func (sit *sovereignIndexTokensHandler) IndexCrossChainTokens(elasticClient elas
 func (sit *sovereignIndexTokensHandler) getNewTokensFromSCRs(elasticClient elasticproc.DatabaseClientHandler, scrs []*data.ScResult) ([]string, error) {
 	receivedTokensIDs := make([]string, 0)
 	for _, scr := range scrs {
-		if scr.SenderShard == core.MainChainShardId {
+		if dto.IsValidCrossChainID(dto.ChainID(scr.SenderShard)) {
 			receivedTokensIDs = append(receivedTokensIDs, sit.extractNewSovereignTokens(scr.Tokens)...)
 		}
 	}
