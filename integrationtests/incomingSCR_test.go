@@ -15,6 +15,7 @@ import (
 	"github.com/multiversx/mx-chain-core-go/data/outport"
 	"github.com/multiversx/mx-chain-core-go/data/smartContractResult"
 	"github.com/multiversx/mx-chain-core-go/data/transaction"
+	vmcommon "github.com/multiversx/mx-chain-vm-common-go"
 	"github.com/stretchr/testify/require"
 
 	indexerData "github.com/multiversx/mx-chain-es-indexer-go/process/dataindexer"
@@ -86,6 +87,7 @@ func TestCrossChainTokensIndexingFromMainChain(t *testing.T) {
 
 	allTokens := getAllTokensIDs(tokens, nfts)
 	allTokens = append(allTokens, getAllNftIDs(nfts)...)
+	allTokens = append(allTokens, vmcommon.EGLDIdentifier)
 	genericResponse := &GenericResponse{}
 	err = esClient.DoMultiGet(context.Background(), allTokens, indexerData.TokensIndex, true, genericResponse)
 	require.Nil(t, err)
@@ -261,7 +263,7 @@ func getAllNftIDs(nfts []esNft) []string {
 
 func createMultiEsdtTransferData(tokens []esToken, nfts []esNft) []byte {
 	data := []byte(core.BuiltInFunctionMultiESDTNFTTransfer +
-		"@" + hex.EncodeToString(big.NewInt(int64(len(tokens)+len(nfts))).Bytes()))
+		"@" + hex.EncodeToString(big.NewInt(int64(len(tokens)+len(nfts)+1)).Bytes()))
 	for _, token := range tokens {
 		data = append(data, []byte(
 			"@"+hex.EncodeToString([]byte(token.Identifier))+
@@ -275,6 +277,10 @@ func createMultiEsdtTransferData(tokens []esToken, nfts []esNft) []byte {
 				"@"+hex.EncodeToString(big.NewInt(0).SetUint64(nft.Nonce).Bytes())+
 				"@"+hex.EncodeToString(nftDataBytes))...)
 	}
+	data = append(data, []byte(
+		"@"+hex.EncodeToString([]byte("EGLD-000000"))+
+			"@"+
+			"@"+hex.EncodeToString([]byte{0x01}))...)
 
 	return data
 }
