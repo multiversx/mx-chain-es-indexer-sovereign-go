@@ -8,6 +8,7 @@ import (
 
 	"github.com/multiversx/mx-chain-core-go/core"
 	"github.com/multiversx/mx-chain-core-go/data/esdt"
+	vmcommon "github.com/multiversx/mx-chain-vm-common-go"
 
 	"github.com/multiversx/mx-chain-es-indexer-go/data"
 	indexerdata "github.com/multiversx/mx-chain-es-indexer-go/process/dataindexer"
@@ -127,6 +128,10 @@ func (sit *sovereignIndexTokensHandler) serializeNewTokens(responseTokensInfo []
 }
 
 func formatToken(token data.ResponseTokenInfoDB) (data.TokenInfo, string) {
+	if token.ID == vmcommon.EGLDIdentifier {
+		return createEGLDTokenInfo(), token.ID
+	}
+
 	token.Source.OwnersHistory = nil
 	token.Source.Properties = nil
 
@@ -135,6 +140,16 @@ func formatToken(token data.ResponseTokenInfoDB) (data.TokenInfo, string) {
 		identifier = token.Source.Token // for tokens/collections
 	}
 	return token.Source, identifier
+}
+
+func createEGLDTokenInfo() data.TokenInfo {
+	return data.TokenInfo{
+		Name:        "EGLD",
+		Ticker:      "EGLD",
+		Token:       vmcommon.EGLDIdentifier,
+		NumDecimals: 18,
+		Type:        core.FungibleESDT,
+	}
 }
 
 // IsInterfaceNil returns true if there is no value under the interface
